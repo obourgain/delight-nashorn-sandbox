@@ -51,8 +51,10 @@ class JsEvaluator implements Runnable {
   public void run() {
     try {
       threadMonitor.setThreadToMonitor(Thread.currentThread());
-      result = operation.executeScriptEngineOperation(scriptEngine);
-    } 
+      if(threadMonitor.isThreadSetInTime()) {
+        result = operation.executeScriptEngineOperation(scriptEngine);
+      }
+    }
     catch (final RuntimeException e) {
       // InterruptedException means script was successfully interrupted,
       // so no exception should be propagated

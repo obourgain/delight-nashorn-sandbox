@@ -38,7 +38,11 @@ public class ThreadMonitor {
 
 	private final AtomicBoolean memoryLimitExceeded;
 
+	private final AtomicBoolean threadNotSetInTime;
+
 	private final Object monitor;
+
+	private final Object threadNotSetInTimeMonitor;
 
 	private Thread threadToMonitor;
 
@@ -54,7 +58,9 @@ public class ThreadMonitor {
 		scriptKilled = new AtomicBoolean(false);
 		cpuLimitExceeded = new AtomicBoolean(false);
 		memoryLimitExceeded = new AtomicBoolean(false);
+		threadNotSetInTime = new AtomicBoolean(false);
 		monitor = new Object();
+		threadNotSetInTimeMonitor = new Object();
 		
 		// ensure the ThreadMXBean is supported in the JVM
 		try {
@@ -96,8 +102,11 @@ public class ThreadMonitor {
 					monitor.wait((maxCPUTime + 500) / MILI_TO_NANO);
 				}
 			}
-			if (threadToMonitor == null) {
-				throw new IllegalStateException("Executor thread not set after " + maxCPUTime / MILI_TO_NANO + " ms");
+			synchronized (threadNotSetInTimeMonitor) {
+				if (threadToMonitor == null) {
+					threadNotSetInTime.set(true);
+					throw new IllegalStateException("Executor thread not set after " + maxCPUTime / MILI_TO_NANO + " ms");
+				}
 			}
 			final long startCPUTime = getCPUTime();
 			final long startMemory = getCurrentMemory();
@@ -186,13 +195,16 @@ public class ThreadMonitor {
 
 	public void stopMonitor() {
 		stop.set(true);
+		threadNotSetInTime.set(false);
 		notifyMonitorThread();
 	}
 
 	public void setThreadToMonitor(final Thread t) {
-		reset();
-		threadToMonitor = t;
-		notifyMonitorThread();
+		synchronized (threadNotSetInTimeMonitor) {
+			reset();
+			threadToMonitor = t;
+			notifyMonitorThread();
+		}
 	}
 
 	public void scriptFinished() {
@@ -209,6 +221,10 @@ public class ThreadMonitor {
 
 	public boolean isScriptKilled() {
 		return scriptKilled.get();
+	}
+
+	public boolean isThreadSetInTime() {
+		return !threadNotSetInTime.get();
 	}
 
 	private void notifyMonitorThread() {
